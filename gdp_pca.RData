@@ -1,0 +1,252 @@
+library(rdbnomics)
+library(dplyr)
+library(rdbnomics)
+library(dplyr)
+library(zoo)
+
+series <- c(
+  import = "IMF/IFS/Q.TR.NM_R_SA_XDC",
+  export= "IMF/IFS/Q.TR.NX_R_SA_XDC",
+
+  
+  # Financial variables
+  deposit_rate                = "IMF/IFS/Q.TR.FIDR_PA",
+  policy_rate                 = "IMF/IFS/Q.TR.FPOLM_PA",
+  
+  # Fiscal variables
+  fiscal_balance              = "IMF/IFS/Q.TR.GG_GXOBP_G01_XDC",
+  
+  # GDP & prices
+  real_gdp                    = "IMF/IFS/Q.TR.NGDP_R_SA_XDC",
+  cpi_inflation_qoq           = "IMF/IFS/Q.TR.PCPI_PC_PP_PT",
+  ppi_index                   = "IMF/IFS/Q.TR.PPPI_IX",
+  
+  # Industrial production
+  electricity_prod_growth     = "IMF/IFS/Q.TR.AIPEE_PC_PP_PT",
+  manufacturing_prod_growth   = "IMF/IFS/Q.TR.AIPMA_PC_PP_PT",
+  mining_prod_growth          = "IMF/IFS/Q.TR.AIPMI_PC_PP_PT",
+  industrial_prod_sa          = "IMF/IFS/Q.TR.AIP_PC_PP_SA_PT",
+  
+  unemployment= "IMF/IFS/Q.TR.LUR_PT",
+  labor_index="IMF/IFS/Q.TR.LE_IX",
+  labor_force="IMF/IFS/Q.TR.LLF_PE_PC_PP_PT"
+
+  
+)
+
+data_raw <- rdb(ids = unname(series))
+
+data_clean <- data_raw %>%
+  filter(!is.na(value)) %>%
+  mutate(
+    period2 = gsub("-", " ", original_period),
+    time = as.yearqtr(period2, format = "%Y Q%q"),
+    variable = names(series)[match(
+      series_code,
+      sub("IMF/IFS/", "", unname(series))
+    )]
+  ) %>%
+  filter(
+    !is.na(time),
+    time >= as.yearqtr("1998 Q1", format = "%Y Q%q"),
+    time <= as.yearqtr("2025 Q4", format = "%Y Q%q")
+  ) %>%
+  select(time, variable, value)
+
+wide_data <- data_clean %>%
+  pivot_wider(
+    names_from = variable,
+    values_from = value
+  ) %>%
+  arrange(time)
+
+growth_vars <- c(
+  "import",
+  "export",
+  "real_gdp",
+  "ppi_index",
+  "labor_index"
+)
+
+data_treated <- wide_data %>%
+  arrange(time) %>%
+  mutate(
+    
+    # 100 * log difference
+    across(
+      all_of(growth_vars),
+      ~ 100 * (log(.) - log(lag(.))),
+      .names = "{.col}"
+    )
+    
+    # fiscal_balance şimdilik olduğu gibi bırakılıyor
+  ) %>%
+  
+  # Diff sonrası oluşan ilk NA satırını temizle
+  filter(complete.cases(.))
+
+library(readr)
+library(dplyr)
+library(zoo)
+library(lubridate)
+
+read_yield_csv <- function(file, varname){
+  
+  df <- read_csv(file, show_col_types = FALSE)
+  
+  df %>%
+    select(Date, Price) %>%
+    mutate(
+      Date  = mdy(Date),
+      
+      # Price temizleme
+      Price = gsub(",", "", Price),
+      Price = gsub("%", "", Price),
+      Price = as.numeric(Price),
+      
+      time = as.yearqtr(Date)
+    ) %>%
+    group_by(time) %>%
+    summarise(
+      value = mean(Price, na.rm = TRUE),
+      .groups = "drop"
+    ) %>%
+    rename(!!varname := value)
+  
+}
+
+bond_2y <- read_yield_csv(
+  "Turkey 2-Year Bond Yield Historical Data.csv",
+  "bond_2y"
+)
+
+bond_3y <- read_yield_csv(
+  "Turkey 3-Year Bond Yield Historical Data.csv",
+  "bond_3y"
+)
+
+bond_5y <- read_yield_csv(
+  "Turkey 5-Year Bond Yield Historical Data.csv",
+  "bond_5y"
+)
+
+bond_10y <- read_yield_csv(
+  "Turkey 10-Year Bond Yield Historical Data.csv",
+  "bond_10y"
+)
+
+data_treated <- wide_data %>%
+  arrange(time) %>%
+  mutate(
+    
+    across(
+      all_of(growth_vars),
+      ~ 100 * (log(.) - log(lag(.))),
+      .names = "{.col}"
+    )
+    
+  )
+
+data_treated2 <- data_treated %>%
+  left_join(yield_curve, by = "time") %>%
+  arrange(time)
+
+save.image("/Users/yasemin/desktop/gdp_pca.RData")
+
+growth_vars_excel <- c(
+  "internal_debt",
+  "usd",
+  "eur",
+  "m1",
+  "m2",
+  "bist",
+  "kredi",
+  "fdi"
+)
+
+library(dplyr)
+library(zoo)
+
+evds_pca <- evds_pca %>%
+  rename(time = date) %>%
+  mutate(
+    time = as.yearqtr(time)
+  )
+
+data_excel_treated <- evds_pca %>%
+  arrange(time) %>%
+  mutate(
+    
+    across(
+      all_of(growth_vars_excel),
+      ~ 100 * (log(.) - log(lag(.))),
+      .names = "{.col}"
+    ),
+    
+    budget_deficit =
+      100 * budget_deficit / gdp_nom,
+    
+    cariacik =
+      100 * cariacik / gdp_nom
+    
+  ) 
+  
+
+final_data <- data_treated2 %>%
+  full_join(data_excel_treated, by = "time") %>%
+  arrange(time)
+
+final_data <- final_data %>%
+  mutate(
+  fiscal_balance =
+      100 * fiscal_balance / gdp_nom
+   ) 
+
+final_data2 <- final_data %>% select(-gdp_nom)
+
+na_ratio <- sapply(
+  final_data2,
+  function(x) mean(is.na(x))
+)
+
+sort(na_ratio)
+
+X <- final_data2 %>%
+  select(-time)
+
+X <- X %>%
+  select(where(~ mean(is.na(.)) < 0.35))
+
+library(zoo)
+
+X_filled <- X %>%
+  mutate(
+    across(
+      everything(),
+      ~ na.approx(., na.rm = FALSE)
+    )
+  )
+
+X_filled <- na.omit(X_filled)
+
+X_scaled <- scale(X_filled)
+
+pca <- prcomp(X_scaled)
+
+summary(pca)
+
+plot(
+  pca,
+  type = "l",
+  main = "Scree Plot"
+)
+
+round(pca$rotation[,1:3], 2)
+
+pc_df <- data.frame(
+  time = final_data2$time[(nrow(final_data2)-nrow(X_filled)+1):nrow(final_data2)],
+  PC1 = pca$x[,1],
+  PC2 = pca$x[,2]
+)
+
+plot(pc_df$time, pc_df$PC1, type = "l")
