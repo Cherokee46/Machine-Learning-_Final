@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 
 # Load data exported from R
 df = pd.read_csv(
-    r"D:\Articles@arf\ML\ForecastingLab\final_data2.csv"
+    r"D:\Articles@arf\AIE683-ML-Forecasting-Inflation_PCA_R,Py\AIE683-ML-Forecasting-Inflation_PCA_R,Py\final_data2.csv"
 )
 print(df.head())
 
