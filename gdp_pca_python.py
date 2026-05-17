@@ -3,7 +3,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 import matplotlib.pyplot as plt
 
-# Load data exported from R
+# Load data exported from csv datas in my local folder path
 df = pd.read_csv(
     r"D:\Articles@arf\AIE683-ML-Forecasting-Inflation_PCA_R,Py\AIE683-ML-Forecasting-Inflation_PCA_R,Py\final_data2.csv"
 )
